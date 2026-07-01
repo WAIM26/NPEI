@@ -748,6 +748,9 @@ DEVILONTHEGRSS : 1 - 0 - 0`;
         // Variables de synchronisation GitHub
         const GITHUB_FILENAME = 'data.txt'; // Fichier stocké dans votre dépôt
         const GITHUB_BRANCH = 'main';
+        // Repo public par défaut — toujours lu au chargement même sans sync configurée
+        const PUBLIC_REPO_USER = 'WAIM26';
+        const PUBLIC_REPO_NAME = 'NPEI';
 
         window.onload = function() {
             // Charger la configuration existante
@@ -763,32 +766,36 @@ DEVILONTHEGRSS : 1 - 0 - 0`;
             loadInitialData();
         }
 
-        // Chargement hybride intelligent
+        // Chargement hybride intelligent — lit toujours data.txt depuis le repo public au démarrage
         async function loadInitialData() {
             const user = localStorage.getItem('github_user');
             const repo = localStorage.getItem('github_repo');
 
-            // Si config GitHub active, on tente de récupérer le fichier public sur GitHub
-            if (user && repo) {
-                try {
-                    // Utilisation d'un paramètre de cache-busting (?t=...) pour éviter la mise en cache GitHub
-                    const rawUrl = `https://raw.githubusercontent.com/${user}/${repo}/${GITHUB_BRANCH}/${GITHUB_FILENAME}?t=${Date.now()}`;
-                    const response = await fetch(rawUrl);
-                    if (response.ok) {
-                        const cloudData = await response.text();
-                        if (cloudData && cloudData.trim()) {
-                            document.getElementById('rawInputArea').value = cloudData;
-                            parseAndProcessData(cloudData, false); // Calculer sans ré-écrire
-                            updateGitHubUI(true);
-                            return;
-                        }
+            // Déterminer quel repo lire : priorité au repo configuré par l'utilisateur,
+            // sinon on lit le repo public par défaut (lecture anonyme, pas de token requis)
+            const fetchUser = user || PUBLIC_REPO_USER;
+            const fetchRepo = repo || PUBLIC_REPO_NAME;
+
+            try {
+                // Lecture du fichier data.txt via raw.githubusercontent.com (public, sans auth)
+                // Cache-busting (?t=...) pour éviter la mise en cache CDN GitHub
+                const rawUrl = `https://raw.githubusercontent.com/${fetchUser}/${fetchRepo}/${GITHUB_BRANCH}/${GITHUB_FILENAME}?t=${Date.now()}`;
+                const response = await fetch(rawUrl);
+                if (response.ok) {
+                    const cloudData = await response.text();
+                    if (cloudData && cloudData.trim()) {
+                        document.getElementById('rawInputArea').value = cloudData;
+                        parseAndProcessData(cloudData, false); // Calculer sans ré-écrire
+                        // Indiquer le statut de sync seulement si l'utilisateur a configuré son token
+                        updateGitHubUI(!!(user && repo));
+                        return;
                     }
-                } catch (e) {
-                    console.error("Impossible de joindre GitHub, repli sur le stockage local.", e);
                 }
+            } catch (e) {
+                console.error("Impossible de joindre GitHub, repli sur le stockage local.", e);
             }
 
-            // Repli vers LocalStorage
+            // Repli vers LocalStorage si GitHub est injoignable
             let savedRaw = localStorage.getItem('neupel_local_raw');
             if (!savedRaw) {
                 savedRaw = DEFAULT_RAW_DATA;
